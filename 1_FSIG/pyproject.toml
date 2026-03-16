@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "unidad"
+version = "0.0.1"
+description = "Uni-DAD training and adaptation codebase"
+requires-python = ">=3.10,<3.11"
+
+[tool.setuptools.packages.find]
+where = ["."]
