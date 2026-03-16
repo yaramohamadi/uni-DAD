@@ -164,10 +164,6 @@ cython_debug/
 
 diffusers
 
-*/*.png
-
-tests/data
-
 wandb
 
 .vscode 
@@ -181,15 +177,7 @@ wandb
 *.pt
 ignored_cache
 
-*.jpg
-*.png
-
-
-
-*.png
 *.out
 *.err
 third_party/dhariwal
-**/datasets/targets/FFHQ_lmdb/
-**/datasets/targets/
 **/.DS_Store
