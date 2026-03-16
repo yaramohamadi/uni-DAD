@@ -168,12 +168,10 @@ wandb
 
 .vscode 
 *.zip
-*.npz 
 *.tar.gz
 *.pyc
 *.pb
 *.pkl
-*.npz
 *.pt
 ignored_cache
 
