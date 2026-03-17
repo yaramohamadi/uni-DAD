@@ -28,6 +28,13 @@ We evaluate `Uni-DAD` on two comprehensive benchmarks for few-shot image generat
   <img src="3_Docs/Uni-DAD_teaser.png" alt="Uni-DAD teaser" height="500px">
 </div>
 
+## News
+
+- 📅 **2026-03-17** — Updated the **arXiv** version with new **subject-driven personalization** results. Check it out on [arXiv 2508.05685](https://arxiv.org/pdf/2511.18281)!
+- 🚀 **2026-03-17** — Created this **GitHub** repository and uploaded the first version of the **few-shot image generation** code.
+- ⚠️ **2026-03-17** — The current codebase is an initial release and has not yet been fully tested.
+- 🔜 **Coming soon** — Trained weights and the **subject-driven personalization** code.
+
 ## Table of Contents
 
 - [Abstract](#abstract)
