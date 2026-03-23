@@ -33,7 +33,8 @@ We evaluate `Uni-DAD` on two comprehensive benchmarks for few-shot image generat
 - 📅 **2026-03-17** — Updated the **arXiv** version with new **subject-driven personalization** results. Check it out on [arXiv 2508.05685](https://arxiv.org/pdf/2511.18281)!
 - 🚀 **2026-03-17** — Created this **GitHub** repository and uploaded the first version of the **few-shot image generation** code.
 - ⚠️ **2026-03-17** — The current codebase is an initial release and has not yet been fully tested.
-- 🔜 **Coming soon** — Trained weights and the **subject-driven personalization** code.
+- 🚀 **2026-03-23** — Uploaded the first version of the **subject-driven personalization application** code.
+- 🔜 **Coming soon** — Trained weights.
 
 ## Table of Contents
 
@@ -49,15 +50,14 @@ We evaluate `Uni-DAD` on two comprehensive benchmarks for few-shot image generat
   - [2) Train Only](#2-train-only)
   - [3) Test Only](#3-test-only)
 - [Subject-driven Personalization with SDv1.5](#subject-driven-personalization-with-sdv15)
-  - [SDP Structure](#structure)
-  - [SDP Environment](#environment)
-  - [SDP Weights](#weights)
-  - [SDP Data](#data)
-  - [SDP Config](#config)
-  - [SDP Weights & Biases (W&B) Logging](#weights--biases-wb-logging)
-  - [1) SDP Train and Streaming Test in Parallel (Recommended)](#1-train-and-streaming-test-in-parallel-recommended)
-  - [2) SDP Train Only](#2-train-only)
-  - [3) SDP Test Only](#3-test-only)
+  - [SDP Structure](#structure-1)
+  - [SDP Environment](#environment-1)
+  - [SDP Weights](#weights-1)
+  - [SDP Data](#data-1)
+  - [SDP Config](#config-1)
+  - [1) SDP Train and Streaming Test in Parallel (Recommended)](#1-sdp-train-and-streaming-test-in-parallel-recommended)
+  - [2) SDP Train Only](#2-sdp-train-only)
+  - [3) SDP Test Only](#3-sdp-test-only)
 - [Contact](#contact)
 - [Citation](#citation)
 - [Acknowledgments](#acknowledgments)
