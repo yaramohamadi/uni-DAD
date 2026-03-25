@@ -87,24 +87,24 @@ We evaluate `Uni-DAD` on two comprehensive benchmarks for few-shot image generat
 │       └── test.sh                    # Entry point for testing and evaluating a trained checkpoints
 ├── 2_SDP/
 │   ├── checkpoints/                   # Pretrained .pt models (e.g., ffhq.pt)
-│       ├── download_checkpoints.sh    # 
+│   │   └── download_checkpoints.sh    # 
 │   ├── data/                          # Dataset roots
 │   ├── main/                          
-│       ├── prepare_data               # Create dataset 
-│            ├── README.md             # Thorough instructions to create dataset with lmdb format
-│       ├── models                     # Modules multihead GAN, Guidance, U-Net, Unified Model 
-│       ├── pipeline                   # Overall launcher
-│            ├── train_sd.py           # Main Training launcher
-│            ├── paused_generation.py  # Generation Helper
+│   │   └── prepare_data               # Create dataset 
+│   │        └── README.md             # Thorough instructions to create dataset with lmdb format
+│   │   ├── models                     # Modules multihead GAN, Guidance, U-Net, Unified Model 
+│   │   └── pipeline                   # Overall launcher
+│   │        ├── train_sd.py           # Main Training launcher
+│   │        └── paused_generation.py  # Generation Helper
 │   ├── evaluation/                    # 
-│       ├── run_eval.sh                # Evaluation launcher
-│       ├── build_manifest.py          # Creating evaluation manifest calling to evaluation script
-│       ├── evaluation.py              # Evaluation script calling to run_metrics script
-│       ├── run_metrics.py             # CLIP-I CLIP-T and DINO modules
-│   └── scripts/
-│       ├── train.sh                   # Entry point for training. Also called by train_test_stream.sh
-│       ├── train_test_stream.sh       # Entry point for training with streaming parallel evaluation (Recommended)
-│       └── test.sh                    # Entry point for testing and evaluating a trained checkpoints
+│   │   ├── run_eval.sh                # Evaluation launcher
+│   │   ├── build_manifest.py          # Creating evaluation manifest calling to evaluation script
+│   │   ├── evaluation.py              # Evaluation script calling to run_metrics script
+│   │   └── run_metrics.py             # CLIP-I CLIP-T and DINO modules
+│   ├── scripts/
+│   │   ├── train.sh                   # Entry point for training. Also called by train_test_stream.sh
+│   │   ├── train_test_stream.sh       # Entry point for training with streaming parallel evaluation (Recommended)
+│   │   └── test.sh                    # Entry point for testing and evaluating a trained checkpoints
 │   └── setup.sh                       # Create uni_dad_sdp environment
 └── README.md
 ```
