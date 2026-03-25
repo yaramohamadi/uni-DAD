@@ -433,7 +433,7 @@ If you find `Uni-DAD` useful or relevant to your research, please kindly cite:
 ```bib
 @inproceedings{bahram2025uni,
     title={Uni-DAD: Unified Distillation and Adaptation of Diffusion Models for Few-step Few-shot Image Generation},
-    author={Bahram, Yara and Desbos, Melodie and Shateri, Mohammadhadi and Granger, Eric},
+    author={Bahram, Yara and Desbos, Mélodie and Shateri, Mohammadhadi and Granger, Eric},
     booktitle={CVPR},
     year={2026}
 }
@@ -441,6 +441,6 @@ If you find `Uni-DAD` useful or relevant to your research, please kindly cite:
 
 ## Acknowledgments 
 
-This work was done in collaboration while Yara Bahram and Melodie Desbos were full-time students at LIVIA - ILLS - ETS. This research was supported by the Natural Sciences and Engineering Research Council of Canada, and the Digital Research Alliance of Canada.
+This work was done in collaboration while Yara Bahram and Mélodie Desbos were full-time students at LIVIA - ILLS - ETS. This research was supported by the Natural Sciences and Engineering Research Council of Canada, and the Digital Research Alliance of Canada.
 
 Our code is largely built on [DMD2](https://github.com/tianweiy/DMD2), we thank them for their valuable contribution and great code. We additionally reuse the implementation of [Guided-DDPM](https://github.com/openai/guided-diffusion) in [dhariwal](third_party/dhariwal) folder. In Few-shot Image Generation using Guided-DDPM, we use the code by [CRDI](https://github.com/YuCao16/CRDI/tree/main) for Intra-LPIPS and [TTUR](https://github.com/bioinf-jku/TTUR) for FID calculation. In Subject-Driven Application, we use the dataset by [Dreambooth](https://huggingface.co/papers/2208.12242) and also initiate pipelines with Stable Diffusion SDv1.5 from [Diffusers](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5).
