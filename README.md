@@ -34,7 +34,7 @@ We evaluate `Uni-DAD` on two comprehensive benchmarks for few-shot image generat
 - 🚀 **2026-03-17** — Created this **GitHub** repository and uploaded the first version of the FSIG code.
 - ⚠️ **2026-03-17** — The current codebase is an initial release and has not yet been fully tested.
 - 🚀 **2026-03-23** — Uploaded the first version of the SDP code.
-- 🔜 **Coming soon** — Trained weights, cleaned FSIG code.
+- 🔜 **Coming soon** — Trained weights.
 
 ## Table of Contents
 
