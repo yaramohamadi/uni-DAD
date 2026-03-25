@@ -370,7 +370,7 @@ This script installs all required packages and sets up the environment.
 To use one of our trained models for generating images, download [cat2 weights]() or [teapot weights](). To train your own model, first download the [SDv1.5 weigths trained on LAION 5+](https://huggingface.co/tianweiy/DMD2/tree/main/model/sdv1.5/laion6.25_sd_baseline_8node_guidance1.75_lr5e-7_seed10_dfake10_diffusion1000_gan1e-3_resume_fid8.35_checkpoint_model_041000), you can use the given script 2_SDP/checkpoints/download_checkpoint.sh.
 
 ### Data 
-The provided 5/6-shot target dataset from Dreambooth are available in `2_SDP/data/instances.lmdb/` in LMDB format. To use your own target set, first resize your images to 521x521 with `1_FSIG/scripts/resize_dataset.py`. Then arrange them following the same structure as the provided examples (e.g., `2_SDP/data/instance_images/cat_2/`). Finally, convert the raw images into LMDB format following README instruction files in `2_SDP/main/prepare_data/`. Instructions are given for specific dreambooth ldmdb dataset creation and for your own dataset.
+The provided 5/6-shot target dataset from Dreambooth can be created following README instruction files in `2_SDP/main/prepare_data/`. To use your own target set, first resize your images to 521x521 with `1_FSIG/scripts/resize_dataset.py`. Then arrange them following the same structure as the provided examples (e.g., `2_SDP/data/instance_images/cat_2/`). Finally, convert the raw images into LMDB format following README instruction files in `2_SDP/main/prepare_data/`.
 
 ### Config
 

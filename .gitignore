@@ -199,8 +199,6 @@ third_party/dhariwal
 2_SDP/**/*.png
 2_SDP/**/*.lmdb
 !2_SDP/data/prompts_and_classes.txt
-!2_SDP/data/instances.lmdb/
-!2_SDP/data/instances.lmdb/**
 !2_SDP/data/instance_images/cat2/
 !2_SDP/data/instance_images/cat2/**
 !2_SDP/checkpoints/download_checkpoint.sh
