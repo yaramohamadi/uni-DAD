@@ -1,4 +1,4 @@
-# 👨‍👦 `Uni-DAD`: Unified Distillation and Adaptation of Diffusion Models for Few-step Few-shot Image Generation
+# <img src="3_Docs/Uni-DAD_pringles4.jpg" width="22" height="22" style="vertical-align:-4px;"> My Project Title `Uni-DAD`: Unified Distillation and Adaptation of Diffusion Models for Few-step Few-shot Image Generation
 
 > **Uni-DAD: Unified Distillation and Adaptation of Diffusion Models for Few-step Few-shot Image Generation**,            
 > Yara Bahram, Melodie Desbos, Mohammadhadi Shateri, Eric Granger   
