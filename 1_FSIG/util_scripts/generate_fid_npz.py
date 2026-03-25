@@ -14,23 +14,25 @@ for a given real image dataset.
   reused later for FID evaluation without recomputing features.
 """
 
-import os
-import numpy as np
 import sys
+from pathlib import Path
+
+import numpy as np
 
 # Add project root to sys.path
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(PROJECT_ROOT)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(PROJECT_ROOT))
 
 from main.dhariwal.evaluation_util import compute_statistics_of_path
 
-# Set path to your real dataset
-image_path = "FFHQ_src/datasets/fid_folders/cat_resized" 
+# Example paths; adapt these to your dataset before running the script.
+image_path = PROJECT_ROOT / "datasets" / "fid_folders" / "cat_resized"
+output_path = PROJECT_ROOT / "datasets" / "fid_npz" / "cat.npz"
 
 # Compute Inception features (mean, covariance)
-mu, sigma, act = compute_statistics_of_path(image_path)
+mu, sigma, act = compute_statistics_of_path(str(image_path))
 
 # Save them into .npz file
-np.savez("FFHQ_src/datasets/fid_npz/cat.npz", mu=mu, sigma=sigma, act=act)
+np.savez(output_path, mu=mu, sigma=sigma, act=act)
 
-print("Saved metfaces.npz successfully.")
+print(f"Saved FID stats to {output_path}.")

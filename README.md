@@ -67,45 +67,51 @@ We evaluate `Uni-DAD` on two comprehensive benchmarks for few-shot image generat
 
 ```
 .
-├── main/
-│   ├── dhariwal/
-│   │   ├── train_dhariwal.py          # Main training script (Uni-DAD / DMD2-style training)
-│   │   ├── test_dhariwal.py           # Evaluation / sampling script
-│   │   ├── dhariwal_unified_model.py  # Unified generator + guidance wrapper
-│   │   ├── dhariwal_guidance.py       # Guidance module (teachers, DMD, GAN)
-│   │   ├── dhariwal_network.py        # Dhariwal/ADM UNet adapter (EDM-style API)
-│   │   ├── evaluation_util.py         # FID, LPIPS, PRDC, few-shot dataset helpers
 ├── 1_FSIG/
 │   ├── checkpoints/                   # Pretrained .pt models (e.g., ffhq.pt)
 │   ├── checkpoint_path/               # Training outputs (logs, ckpts, wandb, etc.)
 │   ├── datasets/                      # Datasets root
-│   │   └── fid_npz/                   # Held-out FID stats (.npz files)
-│   ├── util_scripts/                  # Helper scripts (Default configs, LMDB creation, FID stats, env setup, etc.)
+│   │   ├── fid_npz/                   # Held-out FID stats (.npz files)
+│   │   └── targets/                   # Few-shot raw folders and LMDB datasets
+│   ├── dnnlib/                        # FSIG utility dependency
+│   ├── main/
+│   │   ├── data/                      # LMDB and dataset utilities
+│   │   └── dhariwal/
+│   │       ├── train_dhariwal.py      # Main training script (Uni-DAD / DMD2-style training)
+│   │       ├── test_dhariwal.py       # Evaluation / sampling script
+│   │       ├── dhariwal_unified_model.py
+│   │       ├── dhariwal_guidance.py
+│   │       ├── dhariwal_network.py
+│   │       └── evaluation_util.py     # FID, LPIPS, PRDC, few-shot dataset helpers
+│   ├── torch_utils/                   # FSIG training utilities
+│   ├── util_scripts/                  # Helper scripts (LMDB creation, FID stats, resize, env setup)
 │   └── experiments/
 │       ├── train.sh                   # Entry point for training. Also called by train_test_stream.sh
 │       ├── train_test_stream.sh       # Entry point for training with streaming parallel evaluation (Recommended)
-│       └── test.sh                    # Entry point for testing and evaluating a trained checkpoints
+│       └── test.sh                    # Entry point for testing and evaluation
 ├── 2_SDP/
-│   ├── checkpoints/                   # Pretrained .pt models (e.g., ffhq.pt)
-│   │   └── download_checkpoints.sh    # 
+│   ├── checkpoints/                   # SDP checkpoints
 │   ├── data/                          # Dataset roots
-│   ├── main/                          
-│   │   └── prepare_data               # Create dataset 
-│   │        └── README.md             # Thorough instructions to create dataset with lmdb format
-│   │   ├── models                     # Modules multihead GAN, Guidance, U-Net, Unified Model 
-│   │   └── pipeline                   # Overall launcher
-│   │        ├── train_sd.py           # Main Training launcher
-│   │        └── paused_generation.py  # Generation Helper
-│   ├── evaluation/                    # 
+│   ├── main/
+│   │   ├── models/                    # Multihead GAN, guidance, U-Net, unified model
+│   │   ├── pipeline/
+│   │   │   ├── train_sd.py            # Main training launcher
+│   │   │   └── paused_generation.py   # Generation helper
+│   │   └── prepare_data/
+│   │       └── README.md              # Dataset creation instructions
+│   ├── evaluation/
 │   │   ├── run_eval.sh                # Evaluation launcher
-│   │   ├── build_manifest.py          # Creating evaluation manifest calling to evaluation script
-│   │   ├── evaluation.py              # Evaluation script calling to run_metrics script
-│   │   └── run_metrics.py             # CLIP-I CLIP-T and DINO modules
+│   │   ├── build_manifest.py          # Evaluation manifest builder
+│   │   ├── evaluation.py              # Evaluation entry point
+│   │   └── run_metrics.py             # CLIP-I, CLIP-T, and DINO metrics
 │   ├── scripts/
 │   │   ├── train.sh                   # Entry point for training. Also called by train_test_stream.sh
 │   │   ├── train_test_stream.sh       # Entry point for training with streaming parallel evaluation (Recommended)
-│   │   └── test.sh                    # Entry point for testing and evaluating a trained checkpoints
+│   │   └── test.sh                    # Entry point for testing and evaluation
 │   └── setup.sh                       # Create uni_dad_sdp environment
+├── 3_Docs/                            # Teaser and README assets
+├── third_party/
+│   └── dhariwal/                      # Vendored guided-diffusion dependency for FSIG
 └── README.md
 ```
 
@@ -121,12 +127,12 @@ This application was tested with the following setup:
 - TorchVision 0.15.2
 - CUDA 11.8 (`cu118`)
 
-All additional Python dependencies are listed in `requirements.txt`.
+All additional Python dependencies are listed in `1_FSIG/requirements.txt`.
 
 To create the environment locally with conda, run:
 
 ```bash
-bash 1_FSIG/scripts/setup_env.sh
+bash 1_FSIG/util_scripts/setup_env.sh
 conda activate unidad
 ```
 
@@ -158,18 +164,18 @@ This script installs all required packages and sets up the environment.
 #### FSIG - Unconditional Generation
 To use our trained models for generating images, download [Babies weights]() and [Sunglasses weights](). To train your own model, first download the [guided-DDPM weights trained on FFHQ 256×256](https://github.com/yandex-research/ddpm-segmentation) and save it as `1_FSIG/checkpoints/ffhq.pt`. The checkpoint file needs to be pointed to by ```--model_id``` or ```CHECKPOINT_INIT``` in your config or bash scripts.
 #### SDP - Conditional Generation (Subject Driven Perosnalization)
-To use one of our trained models for generating images, download [cat2 weights]() or [teapot weights](). To train your own model, first download the [SDv1.5 weigths trained on LAION 5+](https://huggingface.co/tianweiy/DMD2/tree/main/model/sdv1.5/laion6.25_sd_baseline_8node_guidance1.75_lr5e-7_seed10_dfake10_diffusion1000_gan1e-3_resume_fid8.35_checkpoint_model_041000), you can use the given script 2_SDP/checkpoints/download_checkpoint.sh.
+To use one of our trained models for generating images, download [cat2 weights]() or [teapot weights](). To train your own model, first download the [SDv1.5 weigths trained on LAION 5+](https://huggingface.co/tianweiy/DMD2/tree/main/model/sdv1.5/laion6.25_sd_baseline_8node_guidance1.75_lr5e-7_seed10_dfake10_diffusion1000_gan1e-3_resume_fid8.35_checkpoint_model_041000).
 
 ### Data 
 
 #### FSIG - Unconditional Generation
-The provided 10-shot target datasets are available in `1_FSIG/datasets/targets/` in both raw and LMDB formats. To use your own target set, first resize your images to 256×256 with `1_FSIG/scripts/resize_dataset.py`. Then arrange them following the same structure as the provided examples (e.g., `1_FSIG/datasets/targets/10_babies/0/`) and include a `dataset.json` file listing the images. Finally, convert the raw images into LMDB format with `1_FSIG/scripts/create_fewshot_lmdb.py` (adapt the script arguments / paths inside as needed).
+The provided 10-shot target datasets are available in `1_FSIG/datasets/targets/` in both raw and LMDB formats. To use your own target set, first resize your images to 256×256 with `1_FSIG/util_scripts/resize_dataset.py`. Then arrange them following the same structure as the provided examples (e.g., `1_FSIG/datasets/targets/10_babies/0/`) and include a `dataset.json` file listing the images. Finally, convert the raw images into LMDB format with `1_FSIG/util_scripts/create_fewshot_lmdb.py` (adapt the script arguments / paths inside as needed).
 
-For FID evaluation, download the full [Babies](https://drive.google.com/file/d/1xBpBRmPRoVXsWerv_zx4kQ4nDQUOsqu_/view), [Sunglasses](https://drive.google.com/file/d/1Uu5y_y8Rjxbj2VEzvT3aBHyn4pltFgyX/view), [MetFaces](https://github.com/NVlabs/metfaces-dataset), and [AFHQ-Cat](https://drive.google.com/file/d/1_-cDkzqz3LlotXSYMBXZLterSQe4fR7S/view) datasets. Resize them to 256×256 with `1_FSIG/scripts/resize_dataset.py`, then convert them into `.npz` files with `1_FSIG/scripts/generate_fid_npz.py`. Save the outputs in `1_FSIG/datasets/fid_npz/` as `babies.npz`, `cat.npz`, `metfaces.npz`, and `sunglasses.npz`. 
+For FID evaluation, download the full [Babies](https://drive.google.com/file/d/1xBpBRmPRoVXsWerv_zx4kQ4nDQUOsqu_/view), [Sunglasses](https://drive.google.com/file/d/1Uu5y_y8Rjxbj2VEzvT3aBHyn4pltFgyX/view), [MetFaces](https://github.com/NVlabs/metfaces-dataset), and [AFHQ-Cat](https://drive.google.com/file/d/1_-cDkzqz3LlotXSYMBXZLterSQe4fR7S/view) datasets. Resize them to 256×256 with `1_FSIG/util_scripts/resize_dataset.py`, then convert them into `.npz` files with `1_FSIG/util_scripts/generate_fid_npz.py`. Save the outputs in `1_FSIG/datasets/fid_npz/` as `babies.npz`, `cat.npz`, `metfaces.npz`, and `sunglasses.npz`. 
 
 #### SDP - Conditional Generation (Subject Driven Perosnalization)
 
-The provided 5/6-shot target dataset from Dreambooth are available in `2_SDP/data/instances.lmdb/` in LMDB format. To use your own target set, first resize your images to 521x521 with `1_FSIG/scripts/resize_dataset.py`. Then arrange them following the same structure as the provided examples (e.g., `2_SDP/data/instance_images/cat_2/`). Finally, convert the raw images into LMDB format following README instruction files in `2_SDP/main/prepare_data/`. Instructions are given for specific dreambooth ldmdb dataset creation and for your own dataset.
+The provided 5/6-shot target dataset from Dreambooth are available in `2_SDP/data/instances.lmdb/` in LMDB format. To use your own target set, first resize your images to 521x521 with `1_FSIG/util_scripts/resize_dataset.py`. Then arrange them following the same structure as the provided examples (e.g., `2_SDP/data/instance_images/cat2/`). Finally, convert the raw images into LMDB format following the instructions in `2_SDP/main/prepare_data/`.
 
 ### Config
 
@@ -283,7 +289,7 @@ To generate samples and evaluate a trained model, use:
 bash 1_FSIG/experiments/test.sh
 ```
 
-To use our trained models for generating images, download [Babies weights]() and [Sunglasses weights](). The code for FID, Intra-LPIPS, and precision/recall (PRDC) computations is provided under `main/dhariwal/evaluation_util.py`.
+To use our trained models for generating images, download [Babies weights]() and [Sunglasses weights](). The code for FID, Intra-LPIPS, and precision/recall (PRDC) computations is provided under `1_FSIG/main/dhariwal/evaluation_util.py`.
 
 During training, the best performing checkpoint is saved under ... . The following example generates 5000 samples from the best checkpoint folder and evaluates a trained student on the 10-shot Babies target set using FID and Intra-LPIPS:
 
@@ -342,10 +348,10 @@ source venv/bin/activate
 This script installs all required packages and sets up the environment.
 
 ### Weights
-To use one of our trained models for generating images, download [cat2 weights]() or [teapot weights](). To train your own model, first download the [SDv1.5 weigths trained on LAION 5+](https://huggingface.co/tianweiy/DMD2/tree/main/model/sdv1.5/laion6.25_sd_baseline_8node_guidance1.75_lr5e-7_seed10_dfake10_diffusion1000_gan1e-3_resume_fid8.35_checkpoint_model_041000), you can use the given script 2_SDP/checkpoints/download_checkpoint.sh.
+To use one of our trained models for generating images, download [cat2 weights]() or [teapot weights](). To train your own model, first download the [SDv1.5 weigths trained on LAION 5+](https://huggingface.co/tianweiy/DMD2/tree/main/model/sdv1.5/laion6.25_sd_baseline_8node_guidance1.75_lr5e-7_seed10_dfake10_diffusion1000_gan1e-3_resume_fid8.35_checkpoint_model_041000).
 
 ### Data 
-The provided 5/6-shot target dataset from Dreambooth can be created following README instruction files in `2_SDP/main/prepare_data/`. To use your own target set, first resize your images to 521x521 with `1_FSIG/scripts/resize_dataset.py`. Then arrange them following the same structure as the provided examples (e.g., `2_SDP/data/instance_images/cat_2/`). Finally, convert the raw images into LMDB format following README instruction files in `2_SDP/main/prepare_data/`.
+The provided 5/6-shot target dataset from Dreambooth can be created following the README instructions in `2_SDP/main/prepare_data/`. To use your own target set, first resize your images to 521x521 with `1_FSIG/util_scripts/resize_dataset.py`. Then arrange them following the same structure as the provided examples (e.g., `2_SDP/data/instance_images/cat2/`). Finally, convert the raw images into LMDB format following the same `2_SDP/main/prepare_data/` instructions.
 
 ### Config
 

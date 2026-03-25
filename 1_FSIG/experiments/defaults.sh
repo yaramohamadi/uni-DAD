@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# repo root
+# FSIG root
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
 cd "$ROOT_DIR"
 
-# make guided-diffusion importable
-export PYTHONPATH="$ROOT_DIR/third_party/dhariwal:${PYTHONPATH:-}"
+# make FSIG modules and guided-diffusion importable
+export PYTHONPATH="$ROOT_DIR:$REPO_ROOT/third_party/dhariwal:${PYTHONPATH:-}"
 
 # -----------------------
 # Project / dataset paths
 # -----------------------
-export PROJECT_PATH="${PROJECT_PATH:-FFHQ_src}"
+export PROJECT_PATH="${PROJECT_PATH:-$ROOT_DIR}"
 export DATASET_NAME="${DATASET_NAME:-babies}"
 export DATASET_SIZE="${DATASET_SIZE:-10}"
 

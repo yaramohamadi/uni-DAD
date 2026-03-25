@@ -24,8 +24,8 @@ format for faster IO during training.
 
 Example:
     python few_shot_lmdb.py \\
-        --data_path FFHQ_src/datasets/targets/10_babies/0 \\
-        --lmdb_path FFHQ_src/datasets/lmdb/10_babies_0 \\
+        --data_path 1_FSIG/datasets/targets/10_babies/0 \\
+        --lmdb_path 1_FSIG/datasets/targets/10_babies_lmdb \\
         --force_rgb
 
 Arguments:

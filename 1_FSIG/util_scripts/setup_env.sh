@@ -10,11 +10,12 @@ TORCH_VERSION="2.0.1"
 TORCHVISION_VERSION="0.15.2"
 TORCH_CUDA_TAG="cu118"
 
-# ---------- paths ---------- 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" # Change this to where you want the environment to be saved
-DHARIWAL_SUBMODULE_PATH="third_party/dhariwal"
+# ---------- paths ----------
+FSIG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "${FSIG_ROOT}/.." && pwd)"
+DHARIWAL_SUBMODULE_PATH="${REPO_ROOT}/third_party/dhariwal"
 
-cd "$REPO_ROOT"
+cd "$FSIG_ROOT"
 
 install_torch() {
   python -m pip install \
