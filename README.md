@@ -1,8 +1,7 @@
 # <img src="3_Docs/Uni-DAD_pringles4.jpg" width="30" height="27" style="vertical-align:-4px;"> `Uni-DAD`: Unified Distillation and Adaptation of Diffusion Models for Few-step Few-shot Image Generation
 
 > **Uni-DAD: Unified Distillation and Adaptation of Diffusion Models for Few-step Few-shot Image Generation**,            
-> Yara Bahram*, Mélodie Desbos*, Mohammadhadi Shateri, Eric Granger
-> *Equal contribution
+> Yara Bahram*, Mélodie Desbos*, Mohammadhadi Shateri, Eric Granger (*Equal contribution)
 > *CVPR 2026 ([arXiv 2508.05685](https://arxiv.org/pdf/2511.18281))*  
 
 
