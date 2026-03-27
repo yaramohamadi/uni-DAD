@@ -1,9 +1,9 @@
 # <img src="3_Docs/Uni-DAD_pringles4.jpg" width="30" height="27" style="vertical-align:-4px;"> `Uni-DAD`: Unified Distillation and Adaptation of Diffusion Models for Few-step Few-shot Image Generation
 
 > **Uni-DAD: Unified Distillation and Adaptation of Diffusion Models for Few-step Few-shot Image Generation**,            
-> Yara Bahram, Mélodie Desbos, Mohammadhadi Shateri, Eric Granger   
+> Yara Bahram*, Mélodie Desbos*, Mohammadhadi Shateri, Eric Granger   
 > *CVPR 2026 ([arXiv 2508.05685](https://arxiv.org/pdf/2511.18281))*  
-
+> * Equal contribution
 Diffusion models are usually adapted for new domains and distilled for faster sampling in two separate stages. We ask: why not do both at once? `Uni-DAD` jointly adapts and distills in a single training pipeline, enabling fast generation on new domains without the design complexity and quality-diversity trade-offs of Distill→Adapt or Adapt→Distill.
 
 
@@ -431,7 +431,7 @@ If you have any questions, please contact Yara Bahram at [yara.mohammadi-bahram@
 If you find `Uni-DAD` useful or relevant to your research, please kindly cite:
 
 ```bib
-@inproceedings{bahram2025uni,
+@inproceedings{bahram2026uni,
     title={Uni-DAD: Unified Distillation and Adaptation of Diffusion Models for Few-step Few-shot Image Generation},
     author={Bahram, Yara and Desbos, Mélodie and Shateri, Mohammadhadi and Granger, Eric},
     booktitle={CVPR},
