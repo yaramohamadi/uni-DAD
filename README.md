@@ -9,7 +9,7 @@ Diffusion models are usually adapted for new domains and distilled for faster sa
 
 
 🪧 [Poster](https://github.com/yaramohamadi/Uni-DAD/blob/master/3_Docs/Uni-DAD_Poster_CVPR2026.pdf)
-▶️ [Video]([https://www.youtube.com/watch?v=N5TexhceXbY](https://www.youtube.com/watch?v=WamLpyRq2LA))
+▶️ [Video](https://www.youtube.com/watch?v=WamLpyRq2LA)
 📑 [Slides](https://github.com/yaramohamadi/DogFit/blob/master/3_Docs/Uni-DAD_slides_CVPR2026.pdf)
 
 ### 📌 CVPR 2026
