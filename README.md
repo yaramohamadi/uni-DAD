@@ -8,15 +8,11 @@
 Diffusion models are usually adapted for new domains and distilled for faster sampling in two separate stages. We ask: why not do both at once? `Uni-DAD` jointly adapts and distills in a single training pipeline, enabling fast generation on new domains without the design complexity and quality-diversity trade-offs of Distill→Adapt or Adapt→Distill.
 
 
-<!-- 
-🪧 [Poster](https://github.com/yaramohamadi/DogFit/blob/master/DogFit_AAAI26_Poster.pdf)
-▶️ [Video](https://www.youtube.com/watch?v=N5TexhceXbY)
-📑 [Slides](https://github.com/yaramohamadi/DogFit/blob/master/DogFit_AAAI26_Slides.pdf)
-This is a comment. -->
+🪧 [Poster](https://github.com/yaramohamadi/Uni-DAD/blob/master/3_Docs/Uni-DAD_Poster_CVPR2026.pdf)
+▶️ [Video]([https://www.youtube.com/watch?v=N5TexhceXbY](https://www.youtube.com/watch?v=WamLpyRq2LA))
+📑 [Slides](https://github.com/yaramohamadi/DogFit/blob/master/3_Docs/Uni-DAD_slides_CVPR2026.pdf)
 
 ### 📌 CVPR 2026
-
-Stay tuned for Poster, Video, and Slides...
 
 ## Abstract
 
