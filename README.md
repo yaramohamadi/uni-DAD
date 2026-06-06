@@ -428,11 +428,12 @@ If you have any questions, please contact Yara Bahram at [yara.mohammadi-bahram@
 If you find `Uni-DAD` useful or relevant to your research, please kindly cite:
 
 ```bib
-@inproceedings{bahram2026uni,
-    title={Uni-DAD: Unified Distillation and Adaptation of Diffusion Models for Few-step Few-shot Image Generation},
-    author={Bahram, Yara and Desbos, Mélodie and Shateri, Mohammadhadi and Granger, Eric},
-    booktitle={CVPR},
-    year={2026}
+@InProceedings{Bahram_2026_CVPR,
+    author    = {Bahram, Yara and Desbos, M{\'e}lodie and Shateri, Mohammadhadi and Granger, Eric},
+    title     = {Uni-DAD: Unified Distillation and Adaptation of Diffusion Models for Few-step Few-shot Image Generation},
+    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+    month     = {June},
+    year      = {2026}
 }
 ```
 
