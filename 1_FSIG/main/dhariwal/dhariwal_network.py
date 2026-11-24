@@ -31,6 +31,7 @@ EDM-style distillation and evaluation code.
 """
 
 
+import os
 import torch
 import torch.nn as nn
 from types import SimpleNamespace
@@ -96,6 +97,9 @@ class DhariwalUNetAdapter(nn.Module):
                 num_res_blocks=2,
                 resblock_updown=True,
                 use_scale_shift_norm=True,
+                # Opt-in gradient checkpointing (UNIDAD_GRAD_CHECKPOINT=1) to fit 48 GB GPUs.
+                # Off by default, so results match the paper setup.
+                use_checkpoint=os.environ.get("UNIDAD_GRAD_CHECKPOINT", "0") == "1",
             )
         )
         self.unet, self.diffusion = script_util.create_model_and_diffusion(**defaults)
