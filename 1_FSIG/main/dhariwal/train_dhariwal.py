@@ -473,6 +473,23 @@ class Trainer:
             else:
                 (final_dir / ".READY").touch()
 
+                # Opt-in: keep a generator-only snapshot (hard link, no extra disk while the
+                # full checkpoint exists) so it survives --delete_ckpts and can be evaluated
+                # later by test_dhariwal.py pointed at UNIDAD_GEN_SNAPSHOT_DIR.
+                snap_root = os.environ.get("UNIDAD_GEN_SNAPSHOT_DIR", "")
+                if snap_root:
+                    snap_dir = Path(snap_root) / f"checkpoint_model_{gs:06d}"
+                    snap_dir.mkdir(parents=True, exist_ok=True)
+                    src_bin = final_dir / "pytorch_model.bin"
+                    dst_bin = snap_dir / "pytorch_model.bin"
+                    if not dst_bin.exists():
+                        try:
+                            os.link(src_bin, dst_bin)
+                        except OSError:
+                            shutil.copy2(src_bin, dst_bin)
+                    (snap_dir / ".READY").touch()
+                    print(f"[save] generator snapshot -> {snap_dir}", flush=True)
+
                 if self.delete_ckpts:
                     for folder in os.listdir(self.output_path):
                         if folder.startswith("checkpoint_model") and folder != f"checkpoint_model_{gs:06d}":
