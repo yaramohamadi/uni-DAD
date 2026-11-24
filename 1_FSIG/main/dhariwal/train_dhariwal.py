@@ -348,7 +348,7 @@ class Trainer:
 
 
         if self.accelerator.is_main_process:
-            run = wandb.init(config=args, dir=self.output_path, **{"mode": "online", "entity": args.wandb_entity, "project": args.wandb_project})
+            run = wandb.init(config=args, dir=self.output_path, **{"mode": os.environ.get("WANDB_MODE", "online"), "entity": args.wandb_entity, "project": args.wandb_project})
             wandb.run.log_code(".")
             wandb.run.name = args.wandb_name
             print(f"run dir: {run.dir}")

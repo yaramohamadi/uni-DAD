@@ -19,4 +19,5 @@ huggingface-hub==0.22.0
 clean-fid
 lpips
 scikit-learn
-opencv-python
+opencv-python<4.11  # 4.11+ needs numpy>=2, torch 2.0.1 needs numpy<2
+numpy<2

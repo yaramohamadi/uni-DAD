@@ -660,7 +660,7 @@ def evaluate():
 
     # wandb
     if accelerator.is_main_process:
-        run = wandb.init(config=args, dir=args.folder, **{"mode": "online", "entity": args.wandb_entity, "project": args.wandb_project})
+        run = wandb.init(config=args, dir=args.folder, **{"mode": os.environ.get("WANDB_MODE", "online"), "entity": args.wandb_entity, "project": args.wandb_project})
         wandb.run.name = args.wandb_name
         print(f"wandb run dir: {run.dir}")
 
