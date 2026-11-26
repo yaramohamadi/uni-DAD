@@ -376,13 +376,14 @@ class Trainer:
             args.checkpoint_path = None  # create a new directory for continued training
 
         
-        # set a single new LR
-        for g in self.optimizer_generator.param_groups:
-            g["lr"] = args.generator_lr
+        # set a single new LR (skipped on a full resume: the restored scheduler owns the LR)
+        if not getattr(self, "_full_resumed", False):
+            for g in self.optimizer_generator.param_groups:
+                g["lr"] = args.generator_lr
 
-        # set a single new LR
-        for g in self.optimizer_guidance.param_groups:
-            g["lr"] = args.guidance_lr
+            # set a single new LR
+            for g in self.optimizer_guidance.param_groups:
+                g["lr"] = args.guidance_lr
 
 
         if self.accelerator.is_main_process:
@@ -463,6 +464,22 @@ class Trainer:
 
 
     def load(self, checkpoint_path):
+        # UNIDAD_FULL_RESUME=1: restore models, optimizers, schedulers, RNG, step and EMA.
+        if os.environ.get("UNIDAD_FULL_RESUME", "0") == "1":
+            accum = self.accelerator.gradient_accumulation_steps
+            self.accelerator.load_state(checkpoint_path)
+            gs = int(str(checkpoint_path).rstrip("/").split("_")[-1])
+            self.global_step = gs
+            self.step = gs * max(1, accum)
+            ema_p = Path(checkpoint_path) / "ema.pt"
+            if self.ema_params is not None and ema_p.exists():
+                blob = torch.load(ema_p, map_location=self.accelerator.device)
+                self.ema_params = OrderedDict((k, v.float()) for k, v in blob["params"].items())
+                self.ema_updates = int(blob["updates"])
+            self._full_resumed = True
+            self.accelerator.print(f"[unidad] FULL resume from {checkpoint_path} at iter {gs}, "
+                                   f"ema_updates={self.ema_updates}", flush=True)
+            return
         # Expecting directories like .../checkpoint_model_000123
         self.global_step = 0# int(checkpoint_path.rstrip("/").split("_")[-1])
         accum = self.accelerator.gradient_accumulation_steps
@@ -517,15 +534,26 @@ class Trainer:
         return sd
 
     def _move_optimizer_state(self, device):
+        """to CPU: move only CUDA state tensors and remember them. Back: restore exactly those.
+        (AdamW keeps 'step' on the CPU; putting it on the GPU forces a sync per tensor per step.)"""
         opts = [self.optimizer_generator, self.optimizer_guidance, self.optimizer_target_teacher]
-        for opt in opts:
+        to_cpu = str(device) == "cpu"
+        if to_cpu:
+            self._offloaded_keys = []
+        moved = set(self._offloaded_keys)
+        for oi, opt in enumerate(opts):
             if opt is None:
                 continue
             inner = getattr(opt, "optimizer", opt)   # accelerate wraps optimizers
-            for st in inner.state.values():
+            for pi, st in enumerate(inner.state.values()):
                 for k, v in st.items():
-                    if torch.is_tensor(v):
-                        st[k] = v.to(device, non_blocking=True)
+                    if not torch.is_tensor(v):
+                        continue
+                    if to_cpu and v.is_cuda:
+                        st[k] = v.to("cpu")
+                        self._offloaded_keys.append((oi, pi, k))
+                    elif (not to_cpu) and (oi, pi, k) in moved:
+                        st[k] = v.to(device)
         torch.cuda.synchronize()
 
     def snapshot_and_eval(self, gs):
@@ -611,6 +639,8 @@ class Trainer:
             tmp_dir.mkdir(parents=True, exist_ok=True)
 
             self.accelerator.save_state(str(tmp_dir), safe_serialization=False)
+            if self.ema_params is not None:
+                torch.save({"params": self.ema_params, "updates": self.ema_updates}, tmp_dir / "ema.pt")
 
             try:
                 os.replace(str(tmp_dir), str(final_dir))
@@ -852,6 +882,13 @@ class Trainer:
                 _snap_every = int(os.environ.get("UNIDAD_SNAPSHOT_EVERY", "0") or 0)
                 if _snap_every > 0 and global_step % _snap_every == 0:
                     self.snapshot_and_eval(global_step)
+
+                if global_step % 100 == 0:
+                    _now = time.time()
+                    if getattr(self, "_speed_t0", None) is not None:
+                        _dt = (_now - self._speed_t0) / max(1, global_step - self._speed_gs)
+                        print(f"[unidad] iter {global_step}: {_dt:.2f} s/iter (incl. pauses)", flush=True)
+                    self._speed_t0, self._speed_gs = _now, global_step
 
                 current_time = time.time()
                 if self.previous_time is None:

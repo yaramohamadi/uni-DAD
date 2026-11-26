@@ -53,7 +53,7 @@ export UNIDAD_LR_DECAY_START="${UNIDAD_LR_DECAY_START:-0.5}"
 export UNIDAD_LR_MIN_RATIO="${UNIDAD_LR_MIN_RATIO:-0.1}"
 
 # ---- snapshots + in-training eval ----
-export LOG_ITERS="${LOG_ITERS:-5000}"            # full 21 GB checkpoints (rarely needed)
+export LOG_ITERS="${LOG_ITERS:-1000}"            # full 21 GB checkpoint (only the newest is kept), for resume
 export MAX_CHECKPOINT=1
 export UNIDAD_SNAPSHOT_DIR="$SNAP_ROOT/$RUN_NAME"
 export UNIDAD_SNAPSHOT_EVERY="${UNIDAD_SNAPSHOT_EVERY:-500}"
@@ -65,11 +65,18 @@ export TOTAL_EVAL_SAMPLES="${TOTAL_EVAL_SAMPLES:-5000}"
 export EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-10}"   # 50 overflows 48 GB and spills to system RAM (9x slower)
 
 mkdir -p "$RUN_DIR" "$UNIDAD_SNAPSHOT_DIR"
+
+# Auto-resume (e.g. after a Windows reboot): newest complete full checkpoint in RUN_DIR.
+LATEST="$(ls -d "$RUN_DIR"/checkpoint_model_* 2>/dev/null | while read -r d; do [[ -f "$d/.READY" ]] && echo "$d"; done | sort | tail -1 || true)"
+if [[ -n "$LATEST" ]]; then
+  export CHECKPOINT_PATH="$LATEST" UNIDAD_FULL_RESUME=1
+  echo "[v2] resuming from $LATEST"
+fi
 {
   echo "date: $(date -Is)"
   echo "host: $(hostname)"
   echo "git: $(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo unknown)"
-  env | grep -E '^(UNIDAD_|DATASET|DMD_|USE_|TRAIN_|GEN_|CLS_|NUM_|SEED|BATCH|GRAD_ACCUM|GAN_|LOG_ITERS|CHECKPOINT_INIT|OUTPUT_PATH|WANDB_MODE|TOTAL_EVAL|EVAL_BATCH)' | sort
-} > "$RUN_DIR/release_config.txt"
+  env | grep -E '^(UNIDAD_|DATASET|DMD_|USE_|TRAIN_|GEN_|CLS_|NUM_|SEED|BATCH|GRAD_ACCUM|GAN_|LOG_ITERS|CHECKPOINT_PATH|CHECKPOINT_INIT|OUTPUT_PATH|WANDB_MODE|TOTAL_EVAL|EVAL_BATCH)' | sort
+} >> "$RUN_DIR/release_config.txt"   # append: one block per (re)start
 
 exec bash "$REPO/1_FSIG/experiments/train.sh"
