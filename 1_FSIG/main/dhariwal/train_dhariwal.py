@@ -493,11 +493,27 @@ class Trainer:
 
     def _generator_state_dict(self, use_ema):
         gen = self.accelerator.unwrap_model(self.model.feedforward_model)
-        sd = OrderedDict((k, v.detach().cpu().clone()) for k, v in gen.state_dict().items())
+        # The adapter registers the same UNet twice (unet.* and its alias model.*), so the
+        # state dict has two keys per tensor. Match by parameter identity so EVERY alias gets
+        # the EMA value; otherwise load_state_dict writes the raw alias last and EMA is lost.
+        ema_by_id = {}
         if use_ema:
-            for name, e in self.ema_params.items():
-                assert name in sd, name
-                sd[name] = e.detach().to(sd[name].dtype).cpu().clone()
+            for name, p in gen.named_parameters():
+                if name in self.ema_params:
+                    ema_by_id[id(p)] = self.ema_params[name]
+        sd = OrderedDict()
+        n_sub = 0
+        copies = {}   # id(original tensor) -> CPU copy, so aliases share storage (file stays 2.2 GB)
+        for k, v in gen.state_dict(keep_vars=True).items():
+            if id(v) not in copies:
+                e = ema_by_id.get(id(v))
+                src = e.to(v.dtype) if e is not None else v
+                copies[id(v)] = src.detach().cpu().clone()
+            if id(v) in ema_by_id:
+                n_sub += 1
+            sd[k] = copies[id(v)]
+        if use_ema:
+            print(f"[unidad] EMA export: {n_sub}/{len(sd)} state-dict entries replaced", flush=True)
         return sd
 
     def _move_optimizer_state(self, device):
@@ -541,7 +557,14 @@ class Trainer:
         offload = os.environ.get("UNIDAD_EVAL_OFFLOAD", "1") == "1"
         t0 = time.time()
         if offload:
+            # Move optimizer state AND models off the GPU. With only the optimizer state moved,
+            # ~18.7 GB stayed resident and the evaluator spilled into shared system memory
+            # under WSL (10x slower sampling) instead of failing.
             self._move_optimizer_state("cpu")
+            self.model.to("cpu")
+            if self.ema_params is not None:
+                for k in self.ema_params:
+                    self.ema_params[k] = self.ema_params[k].to("cpu")
         torch.cuda.empty_cache()
         print(f"[unidad] GPU memory during eval pause: {torch.cuda.memory_allocated() / 1e9:.1f} GB allocated", flush=True)
         # strip torchrun / distributed vars so the evaluator starts as a plain 1-GPU process
@@ -562,6 +585,10 @@ class Trainer:
                 rc = subprocess.call(["bash", str(test_sh)], env=env_k, stdout=logf, stderr=subprocess.STDOUT)
             print(f"[unidad] inline eval {kind} @ {gs} rc={rc}", flush=True)
         if offload:
+            self.model.to(self.accelerator.device)
+            if self.ema_params is not None:
+                for k in self.ema_params:
+                    self.ema_params[k] = self.ema_params[k].to(self.accelerator.device)
             self._move_optimizer_state(self.accelerator.device)
         print(f"[unidad] eval pause took {time.time() - t0:.0f} s", flush=True)
 
