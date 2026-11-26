@@ -52,13 +52,18 @@ export UNIDAD_EMA_DECAY="${UNIDAD_EMA_DECAY:-0.998}"
 export UNIDAD_LR_DECAY_START="${UNIDAD_LR_DECAY_START:-0.5}"
 export UNIDAD_LR_MIN_RATIO="${UNIDAD_LR_MIN_RATIO:-0.1}"
 
-# ---- snapshots + in-training eval ----
-export LOG_ITERS="${LOG_ITERS:-1000}"            # full 21 GB checkpoint (only the newest is kept), for resume
+# ---- snapshots + eval during training ----
+# The trainer stops every UNIDAD_STOP_EVERY iters (full checkpoint), the evaluator then gets the
+# whole GPU, and the trainer resumes (UNIDAD_FULL_RESUME). In-process pausing (INLINE_EVAL=1)
+# made training ~8x slower afterwards on this WSL box (GPU memory filled to 48.3 GB after the
+# models were moved back), so it is off.
+export UNIDAD_STOP_EVERY="${UNIDAD_STOP_EVERY:-500}"
+export LOG_ITERS="${LOG_ITERS:-500}"             # full 21 GB checkpoint (only the newest is kept), for resume
 export MAX_CHECKPOINT=1
 export UNIDAD_SNAPSHOT_DIR="$SNAP_ROOT/$RUN_NAME"
 export UNIDAD_SNAPSHOT_EVERY="${UNIDAD_SNAPSHOT_EVERY:-500}"
 export UNIDAD_RAW_SNAPSHOT_EVERY="${UNIDAD_RAW_SNAPSHOT_EVERY:-2000}"
-export UNIDAD_INLINE_EVAL="${UNIDAD_INLINE_EVAL:-1}"
+export UNIDAD_INLINE_EVAL="${UNIDAD_INLINE_EVAL:-0}"
 export UNIDAD_EVAL_OFFLOAD="${UNIDAD_EVAL_OFFLOAD:-1}"
 export UNIDAD_FAST_LPIPS="${UNIDAD_FAST_LPIPS:-1}"
 export TOTAL_EVAL_SAMPLES="${TOTAL_EVAL_SAMPLES:-5000}"
@@ -66,12 +71,23 @@ export EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-10}"   # 50 overflows 48 GB and spill
 
 mkdir -p "$RUN_DIR" "$UNIDAD_SNAPSHOT_DIR"
 
-# Auto-resume (e.g. after a Windows reboot): newest complete full checkpoint in RUN_DIR.
-LATEST="$(ls -d "$RUN_DIR"/checkpoint_model_* 2>/dev/null | while read -r d; do [[ -f "$d/.READY" ]] && echo "$d"; done | sort | tail -1 || true)"
-if [[ -n "$LATEST" ]]; then
-  export CHECKPOINT_PATH="$LATEST" UNIDAD_FULL_RESUME=1
-  echo "[v2] resuming from $LATEST"
-fi
+latest_ckpt() {
+  ls -d "$RUN_DIR"/checkpoint_model_* 2>/dev/null | while read -r d; do [[ -f "$d/.READY" ]] && echo "$d"; done | sort | tail -1 || true
+}
+
+eval_pending() {   # score every snapshot not yet in stats.json (ema and raw)
+  for kind in ema raw; do
+    local f="$UNIDAD_SNAPSHOT_DIR/$kind"
+    [[ -d "$f" ]] || continue
+    ls -d "$f"/checkpoint_model_* >/dev/null 2>&1 || continue
+    echo "[v2] $(date -Is) eval $kind"
+    OUTPUT_PATH="$f" EXPERIMENT_NAME="${RUN_NAME}_${kind}" WANDB_NAME="${RUN_NAME}_${kind}_eval" \
+      UNIDAD_EVAL_RESUME=1 UNIDAD_EVAL_EXIT_WHEN_IDLE=1 \
+      bash "$REPO/1_FSIG/experiments/test.sh" >> "$f/eval.log" 2>&1 || echo "[v2] eval $kind rc=$?"
+    grep -a -E '^checkpoint .* FID' "$f/eval.log" | tail -1
+  done
+}
+
 {
   echo "date: $(date -Is)"
   echo "host: $(hostname)"
@@ -79,4 +95,19 @@ fi
   env | grep -E '^(UNIDAD_|DATASET|DMD_|USE_|TRAIN_|GEN_|CLS_|NUM_|SEED|BATCH|GRAD_ACCUM|GAN_|LOG_ITERS|CHECKPOINT_PATH|CHECKPOINT_INIT|OUTPUT_PATH|WANDB_MODE|TOTAL_EVAL|EVAL_BATCH)' | sort
 } >> "$RUN_DIR/release_config.txt"   # append: one block per (re)start
 
-exec bash "$REPO/1_FSIG/experiments/train.sh"
+# train -> stop -> eval -> resume, until the trainer writes TRAINING_DONE
+eval_pending                       # catch up first (e.g. after a reboot during eval)
+while [[ ! -f "$RUN_DIR/TRAINING_DONE" ]]; do
+  LATEST="$(latest_ckpt)"
+  if [[ -n "$LATEST" ]]; then
+    export CHECKPOINT_PATH="$LATEST" UNIDAD_FULL_RESUME=1
+    echo "[v2] $(date -Is) resume from $LATEST"
+  else
+    unset CHECKPOINT_PATH UNIDAD_FULL_RESUME
+    echo "[v2] $(date -Is) fresh start"
+  fi
+  bash "$REPO/1_FSIG/experiments/train.sh" || { echo "[v2] train failed rc=$?"; exit 1; }
+  eval_pending
+done
+eval_pending
+echo "[v2] $(date -Is) done"

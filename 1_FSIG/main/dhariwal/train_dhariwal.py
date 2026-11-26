@@ -883,6 +883,16 @@ class Trainer:
                 if _snap_every > 0 and global_step % _snap_every == 0:
                     self.snapshot_and_eval(global_step)
 
+                # UNIDAD_STOP_EVERY: exit cleanly here (after a full checkpoint) so an external
+                # evaluator gets the whole GPU; the launcher then resumes with UNIDAD_FULL_RESUME.
+                _stop_every = int(os.environ.get("UNIDAD_STOP_EVERY", "0") or 0)
+                if _stop_every > 0 and global_step % _stop_every == 0 and global_step < self.train_iters:
+                    if global_step % self.log_iters != 0:
+                        self.global_step = global_step
+                        self.save()
+                    print(f"[unidad] stopping at iter {global_step} for external eval", flush=True)
+                    self._stopped_early = True
+
                 if global_step % 100 == 0:
                     _now = time.time()
                     if getattr(self, "_speed_t0", None) is not None:
@@ -900,6 +910,12 @@ class Trainer:
 
             self.accelerator.wait_for_everyone()
             self.step += 1  # micro-step counter
+            if getattr(self, "_stopped_early", False):
+                break
+
+        if not getattr(self, "_stopped_early", False) and self.accelerator.is_main_process:
+            (Path(self.output_path) / "TRAINING_DONE").touch()
+            print("[unidad] training finished", flush=True)
 
 
     def log_everything(self, loss_dict, log_dict, generator_grad_norm, guidance_grad_norm, accum=None):
