@@ -755,6 +755,55 @@ class Evaluator:
         self.args = args
 
     def calc_intra_lpips(self, device: str = "cuda") -> float:
+        # UNIDAD_FAST_LPIPS=1: same protocol, batched LPIPS calls (much faster).
+        if os.environ.get("UNIDAD_FAST_LPIPS", "0") == "1":
+            return self.calc_intra_lpips_fast(device)
+        return self.calc_intra_lpips_reference(device)
+
+    @torch.no_grad()
+    def calc_intra_lpips_fast(self, device: str = "cuda", chunk: int = 50) -> float:
+        """Batched version of calc_intra_lpips_reference (identical protocol)."""
+        reals = []
+        for real_image, _ in self.real_loader:
+            if self.args.normalization:
+                real_image = real_image * 2 - 1
+            reals.append(real_image)
+        reals = torch.cat(reals, 0).to(device)          # [R, C, H, W], R = 10
+        n_real = reals.shape[0]
+        b = self.fake_images.shape[0]
+        # 1) assign every fake to its nearest real image (LPIPS)
+        assign = []
+        for s0 in range(0, b, chunk):
+            f = self.fake_images[s0:s0 + chunk].to(device)
+            d = torch.stack([self.lpips_fn(f, reals[r:r + 1].expand_as(f)).flatten()
+                             for r in range(n_real)], 1)              # [B, R]
+            assign += np.argmin(d.cpu().numpy(), axis=1).tolist()
+        cluster = {i: [] for i in range(10)}
+        for i, c in enumerate(assign):
+            cluster[int(c)].append(i)
+        cluster = {c: cluster[c][: self.cluster_size] for c in cluster}
+        # 2) mean pairwise LPIPS inside each cluster
+        dists = []
+        for c in cluster:
+            idx = cluster[c]
+            temp = []
+            for i in range(len(idx)):
+                rest = idx[i + 1:]
+                if not rest:
+                    continue
+                img1 = self.fake_images[idx[i]:idx[i] + 1].to(device)
+                for s0 in range(0, len(rest), chunk):
+                    img2 = self.fake_images[rest[s0:s0 + chunk]].to(device)
+                    temp += self.lpips_fn(img1.expand_as(img2), img2).flatten().tolist()
+            if temp:
+                dists.append(np.mean(temp))
+            else:
+                print("**************EMPTY****************")
+                dists.append(0)
+        dists = np.array(dists)
+        return dists[~np.isnan(dists)].mean()
+
+    def calc_intra_lpips_reference(self, device: str = "cuda") -> float:
         cluster = {i: [] for i in range(10)}
         b, _, _, _ = self.fake_images.shape
         for i in tqdm(range(b)):

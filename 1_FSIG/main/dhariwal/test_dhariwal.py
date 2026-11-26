@@ -652,7 +652,8 @@ def evaluate():
     evaluated_checkpoints = set()            # <- NEW: always define it
     overall_stats = {}                       # keep this too (you already have it above)
 
-    if os.path.isfile(info_path) and not args.no_resume and False:
+    # UNIDAD_EVAL_RESUME=1: skip checkpoints already in stats.json (used by in-training eval)
+    if os.path.isfile(info_path) and os.environ.get("UNIDAD_EVAL_RESUME", "0") == "1":
         with open(info_path, "r") as f:
             overall_stats = json.load(f)
         # keys are the checkpoint paths you wrote earlier
@@ -799,6 +800,9 @@ def evaluate():
         new_ckpts = sorted(p for p in Path(folder).glob("checkpoint_model_*") if p.is_dir())
         new_ckpts = [str(p) for p in new_ckpts if str(p) not in evaluated_checkpoints]
         if not new_ckpts:
+            # UNIDAD_EVAL_EXIT_WHEN_IDLE=1: one-shot mode, return once everything is scored
+            if os.environ.get("UNIDAD_EVAL_EXIT_WHEN_IDLE", "0") == "1":
+                return
             time.sleep(3.0)
             continue
 
@@ -949,6 +953,10 @@ def evaluate():
 
                 torch.cuda.empty_cache()
                 evaluated_checkpoints.add(checkpoint)
+                if accelerator.is_main_process:
+                    # write after every checkpoint (the loop below never ends in streaming mode)
+                    with open(os.path.join(folder, "stats.json"), "w") as f:
+                        json.dump(overall_stats, f, indent=2)
             finally:
                 release_eval_lock(ckpt_path)
 

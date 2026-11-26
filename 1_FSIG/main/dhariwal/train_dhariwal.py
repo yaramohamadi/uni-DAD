@@ -293,6 +293,31 @@ class Trainer:
                 num_training_steps=args.train_iters
             )
 
+        # Opt-in LR decay (UNIDAD_LR_DECAY_START = fraction of train_iters where decay starts,
+        # UNIDAD_LR_MIN_RATIO = final lr / base lr). Same linear warm-up, then constant, then
+        # cosine down to the floor. Applied to generator, guidance and target teacher.
+        _decay_start = os.environ.get("UNIDAD_LR_DECAY_START", "")
+        if _decay_start:
+            _start = int(float(_decay_start) * args.train_iters)
+            _floor = float(os.environ.get("UNIDAD_LR_MIN_RATIO", "0.1"))
+            _warm = max(1, args.warmup_step)
+            _total = args.train_iters
+
+            def _lr_lambda(step, _start=_start, _floor=_floor, _warm=_warm, _total=_total):
+                if step < _warm:
+                    return step / _warm
+                if step < _start:
+                    return 1.0
+                prog = min(1.0, (step - _start) / max(1, _total - _start))
+                return _floor + (1.0 - _floor) * 0.5 * (1.0 + math.cos(math.pi * prog))
+
+            self.scheduler_generator = torch.optim.lr_scheduler.LambdaLR(self.optimizer_generator, _lr_lambda)
+            self.scheduler_guidance = torch.optim.lr_scheduler.LambdaLR(self.optimizer_guidance, _lr_lambda)
+            if self.optimizer_target_teacher is not None:
+                self.scheduler_target_teacher = torch.optim.lr_scheduler.LambdaLR(self.optimizer_target_teacher, _lr_lambda)
+            if accelerator.is_main_process:
+                print(f"[unidad] LR decay: cosine from iter {_start} to {_total}, floor x{_floor}", flush=True)
+
         # the self.model is not wrapped in ddp, only its two subnetworks are wrapped 
         prepare_args = [
             self.model.feedforward_model,
@@ -317,6 +342,19 @@ class Trainer:
 
         if self.optimizer_target_teacher is not None:
             (self.optimizer_target_teacher, self.scheduler_target_teacher) = maybe_tt
+
+        # Opt-in EMA of the generator (UNIDAD_EMA_DECAY, per generator update; fp32 copy on GPU).
+        # Warm-up: decay_n = min(decay, (1 + n) / (10 + n)), n = number of EMA updates so far.
+        self.ema_decay = float(os.environ.get("UNIDAD_EMA_DECAY", "0") or 0)
+        self.ema_params = None
+        self.ema_updates = 0
+        if self.ema_decay > 0:
+            _gen = accelerator.unwrap_model(self.model.feedforward_model)
+            self.ema_params = OrderedDict(
+                (n, p.detach().clone().float()) for n, p in _gen.named_parameters() if p.requires_grad
+            )
+            if accelerator.is_main_process:
+                print(f"[unidad] EMA on: decay {self.ema_decay}, {len(self.ema_params)} tensors", flush=True)
 
         self.accelerator = accelerator
         self.train_iters = args.train_iters
@@ -441,6 +479,91 @@ class Trainer:
         # accum = self.accelerator.gradient_accumulation_steps
         # self.step = self.global_step * max(1, accum)  # micro-step counter aligned to optimizer step
         # self.accelerator.print("Resumed weights-only; optimizer/scheduler reset.")
+
+    @torch.no_grad()
+    def _ema_update(self):
+        self.ema_updates += 1
+        n = self.ema_updates
+        d = min(self.ema_decay, (1.0 + n) / (10.0 + n))
+        gen = self.accelerator.unwrap_model(self.model.feedforward_model)
+        for name, p in gen.named_parameters():
+            e = self.ema_params.get(name)
+            if e is not None:
+                e.mul_(d).add_(p.detach().float(), alpha=1.0 - d)
+
+    def _generator_state_dict(self, use_ema):
+        gen = self.accelerator.unwrap_model(self.model.feedforward_model)
+        sd = OrderedDict((k, v.detach().cpu().clone()) for k, v in gen.state_dict().items())
+        if use_ema:
+            for name, e in self.ema_params.items():
+                assert name in sd, name
+                sd[name] = e.detach().to(sd[name].dtype).cpu().clone()
+        return sd
+
+    def _move_optimizer_state(self, device):
+        opts = [self.optimizer_generator, self.optimizer_guidance, self.optimizer_target_teacher]
+        for opt in opts:
+            if opt is None:
+                continue
+            inner = getattr(opt, "optimizer", opt)   # accelerate wraps optimizers
+            for st in inner.state.values():
+                for k, v in st.items():
+                    if torch.is_tensor(v):
+                        st[k] = v.to(device, non_blocking=True)
+        torch.cuda.synchronize()
+
+    def snapshot_and_eval(self, gs):
+        """Save generator snapshots (EMA and/or raw), then optionally pause training and
+        score them with test_dhariwal.py in a subprocess on the same GPU.
+
+        Env: UNIDAD_SNAPSHOT_DIR (root), UNIDAD_RAW_SNAPSHOT_EVERY (0 = never),
+             UNIDAD_INLINE_EVAL=1, UNIDAD_EVAL_OFFLOAD=1 (optimizer state -> CPU during eval).
+        """
+        import subprocess
+        root = Path(os.environ["UNIDAD_SNAPSHOT_DIR"])
+        raw_every = int(os.environ.get("UNIDAD_RAW_SNAPSHOT_EVERY", "0") or 0)
+        kinds = []
+        if self.ema_params is not None:
+            kinds.append("ema")
+        if raw_every > 0 and gs % raw_every == 0:
+            kinds.append("raw")
+        for kind in kinds:
+            d = root / kind / f"checkpoint_model_{gs:06d}"
+            d.mkdir(parents=True, exist_ok=True)
+            tmp = d / "pytorch_model.bin.tmp"
+            torch.save(self._generator_state_dict(use_ema=(kind == "ema")), tmp)
+            os.replace(tmp, d / "pytorch_model.bin")
+            (d / ".READY").touch()
+            print(f"[unidad] snapshot {kind} -> {d}", flush=True)
+
+        if os.environ.get("UNIDAD_INLINE_EVAL", "0") != "1" or not kinds:
+            return
+        offload = os.environ.get("UNIDAD_EVAL_OFFLOAD", "1") == "1"
+        t0 = time.time()
+        if offload:
+            self._move_optimizer_state("cpu")
+        torch.cuda.empty_cache()
+        print(f"[unidad] GPU memory during eval pause: {torch.cuda.memory_allocated() / 1e9:.1f} GB allocated", flush=True)
+        # strip torchrun / distributed vars so the evaluator starts as a plain 1-GPU process
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("RANK", "LOCAL_RANK", "WORLD_SIZE", "LOCAL_WORLD_SIZE", "GROUP_RANK",
+                            "ROLE_RANK", "ROLE_WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT",
+                            "TORCHELASTIC_RUN_ID", "TORCHELASTIC_RESTART_COUNT",
+                            "TORCHELASTIC_MAX_RESTARTS", "TORCHELASTIC_USE_AGENT_STORE",
+                            "TORCHELASTIC_ERROR_FILE", "OMP_NUM_THREADS")}
+        env.update(UNIDAD_EVAL_RESUME="1", UNIDAD_EVAL_EXIT_WHEN_IDLE="1",
+                   TEST_GPUS=os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0])
+        test_sh = Path(__file__).resolve().parents[2] / "experiments" / "test.sh"
+        for kind in kinds:
+            folder = root / kind
+            env_k = dict(env, OUTPUT_PATH=str(folder),
+                         WANDB_NAME=f"{os.environ.get('WANDB_NAME', 'run')}_{kind}_eval")
+            with open(folder / "eval.log", "a") as logf:
+                rc = subprocess.call(["bash", str(test_sh)], env=env_k, stdout=logf, stderr=subprocess.STDOUT)
+            print(f"[unidad] inline eval {kind} @ {gs} rc={rc}", flush=True)
+        if offload:
+            self._move_optimizer_state(self.accelerator.device)
+        print(f"[unidad] eval pause took {time.time() - t0:.0f} s", flush=True)
 
     def save(self):
         run_root = Path(self.output_path)
@@ -618,6 +741,8 @@ class Trainer:
                 self.optimizer_generator.step()
                 self.optimizer_generator.zero_grad(set_to_none=True)
                 self.scheduler_generator.step()
+                if self.ema_params is not None and COMPUTE_GENERATOR_GRADIENT:
+                    self._ema_update()
 
                 self.optimizer_guidance.step()
                 self.optimizer_guidance.zero_grad(set_to_none=True)
@@ -696,6 +821,10 @@ class Trainer:
                     # train_one_step() already computed/used self.global_step, but ensure consistency:
                     self.global_step = global_step
                     self.save()
+
+                _snap_every = int(os.environ.get("UNIDAD_SNAPSHOT_EVERY", "0") or 0)
+                if _snap_every > 0 and global_step % _snap_every == 0:
+                    self.snapshot_and_eval(global_step)
 
                 current_time = time.time()
                 if self.previous_time is None:
