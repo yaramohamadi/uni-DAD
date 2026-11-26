@@ -887,7 +887,8 @@ class Trainer:
                     _now = time.time()
                     if getattr(self, "_speed_t0", None) is not None:
                         _dt = (_now - self._speed_t0) / max(1, global_step - self._speed_gs)
-                        print(f"[unidad] iter {global_step}: {_dt:.2f} s/iter (incl. pauses)", flush=True)
+                        print(f"[unidad] iter {global_step}: {_dt:.2f} s/iter (incl. pauses), "
+                              f"lr_G {self.optimizer_generator.param_groups[0]['lr']:.3e}", flush=True)
                     self._speed_t0, self._speed_gs = _now, global_step
 
                 current_time = time.time()
