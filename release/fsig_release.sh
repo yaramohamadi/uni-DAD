@@ -24,7 +24,7 @@ esac
 SRC_W=$(python3 -c "print(1-$A)")
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RUNS_ROOT="${RUNS_ROOT:-$HOME/uni-DAD-runs}"
+RUNS_ROOT="${RUNS_ROOT:-$REPO/1_FSIG/checkpoint_path}"
 RUN_NAME="${RUN_NAME:-release_${DS}_a${A}}"
 RUN_DIR="$RUNS_ROOT/$RUN_NAME"
 SNAP_DIR="$RUN_DIR/gen_snapshots"
@@ -34,14 +34,14 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" TRAIN_GPUS=0 TEST_GPUS=
 export NPROC_PER_NODE=1 NNODES=1
 export NUM_DENOISING_STEP=3
 export TOTAL_EVAL_SAMPLES="${TOTAL_EVAL_SAMPLES:-5000}"
-# W&B offline by default: no key needed, and the team quota is small.
+# W&B offline by default (no API key needed); set WANDB_MODE=online to sync.
 export WANDB_MODE="${WANDB_MODE:-offline}"
 
 mkdir -p "$RUN_DIR"
 
 if [[ "$MODE" == train ]]; then
   export EXPERIMENT_NAME="$RUN_NAME" WANDB_NAME="$RUN_NAME" OUTPUT_PATH="$RUN_DIR"
-  export CHECKPOINT_INIT="${CHECKPOINT_INIT:-$HOME/uni-DAD-ckpt/ffhq.pt}"
+  export CHECKPOINT_INIT="${CHECKPOINT_INIT:-$REPO/1_FSIG/checkpoints/ffhq.pt}"
   export SEED="${SEED:-10}"
   export BATCH_SIZE=1 GRAD_ACCUM_STEPS=1
   export TRAIN_ITERS="${TRAIN_ITERS:-20000}"

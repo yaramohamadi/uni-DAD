@@ -31,6 +31,7 @@ We evaluate `Uni-DAD` on two comprehensive benchmarks for few-shot image generat
 - 🚀 **2026-03-17** — Created this **GitHub** repository and uploaded the first version of the FSIG code.
 - ⚠️ **2026-03-17** — The current codebase is an initial release and has not yet been fully tested.
 - 🚀 **2026-03-23** — Uploaded the first version of the SDP code.
+- 🛠️ **2026-11-27** — Optional EMA, learning-rate decay, periodic evaluation and full resume for FSIG and SDP (all off by default). Fixed the SDP launch scripts (they exited with `unbound variable`), pinned `numpy<2` / `opencv-python<4.11` for PyTorch 2.0.1, and W&B now respects `WANDB_MODE`.
 - 🔜 **Coming soon** — Trained weights.
 
 ## Table of Contents
@@ -46,6 +47,7 @@ We evaluate `Uni-DAD` on two comprehensive benchmarks for few-shot image generat
   - [1) Train and Streaming Test in Parallel (Recommended)](#1-train-and-streaming-test-in-parallel-recommended)
   - [2) Train Only](#2-train-only)
   - [3) Test Only](#3-test-only)
+  - [4) Optional: EMA, LR Decay and Periodic Evaluation](#4-optional-ema-lr-decay-and-periodic-evaluation)
 - [Subject-driven Personalization with SDv1.5](#subject-driven-personalization-with-sdv15)
   - [SDP Structure](#structure-1)
   - [SDP Environment](#environment-1)
@@ -55,6 +57,7 @@ We evaluate `Uni-DAD` on two comprehensive benchmarks for few-shot image generat
   - [1) SDP Train and Streaming Test in Parallel (Recommended)](#1-sdp-train-and-streaming-test-in-parallel-recommended)
   - [2) SDP Train Only](#2-sdp-train-only)
   - [3) SDP Test Only](#3-sdp-test-only)
+  - [4) Optional: SDP EMA and LR Decay](#4-optional-sdp-ema-and-lr-decay)
 - [Contact](#contact)
 - [Citation](#citation)
 - [Acknowledgments](#acknowledgments)
@@ -321,6 +324,31 @@ bash 1_FSIG/experiments/test.sh
 
 
 
+### 4) Optional: EMA, LR Decay and Periodic Evaluation
+
+These options are **off by default**, so the commands above reproduce the paper setup. They are set with environment variables and are read by `train_dhariwal.py` / `test_dhariwal.py`.
+
+| Variable | Effect |
+|---|---|
+| `UNIDAD_EMA_DECAY=0.998` | Keep an fp32 EMA of the generator, updated after every generator step (the generator updates every `DFAKE_GEN_UPDATE_RATIO` iterations). |
+| `UNIDAD_LR_DECAY_START=0.5`, `UNIDAD_LR_MIN_RATIO=0.1` | Constant learning rate, then a cosine decay from `0.5 × TRAIN_ITERS` down to `0.1 ×` the base learning rate (generator, fake teacher and target teacher). |
+| `UNIDAD_SNAPSHOT_DIR`, `UNIDAD_SNAPSHOT_EVERY=500`, `UNIDAD_RAW_SNAPSHOT_EVERY=2000` | Save generator-only snapshots (EMA every 500 iterations, raw every 2000) in `$UNIDAD_SNAPSHOT_DIR/{ema,raw}/checkpoint_model_*`. |
+| `UNIDAD_STOP_EVERY=500` | Stop training cleanly every 500 iterations after a full checkpoint, so the evaluator can use the whole GPU. |
+| `UNIDAD_FULL_RESUME=1` | Resume from `CHECKPOINT_PATH` with models, optimizers, schedulers, RNG, step and EMA restored (the default resume reloads weights only and restarts at step 0). |
+| `UNIDAD_GRAD_CHECKPOINT=1` | Gradient checkpointing in the ADM UNet (training with the target teacher fits in 48 GB; gradients are unchanged). |
+| `UNIDAD_FAST_LPIPS=1` | Batched Intra-LPIPS (same protocol and value, faster). |
+| `UNIDAD_EVAL_RESUME=1`, `UNIDAD_EVAL_EXIT_WHEN_IDLE=1` | Evaluator skips snapshots already in `stats.json` and exits when nothing is left. |
+
+`release/fsig_release_v2.sh` puts these together: it trains, stops every 500 iterations, scores the new snapshots (FID and Intra-LPIPS on 5K samples, NFE 3), resumes, and repeats until training ends. It also resumes automatically after a crash or reboot.
+
+```bash
+# single GPU, 10-shot Babies, a = 0.25 (use metfaces for a = 0.75)
+CHECKPOINT_INIT=1_FSIG/checkpoints/ffhq.pt bash release/fsig_release_v2.sh babies
+# results: <SNAP_ROOT>/v2_babies_a0.25/{ema,raw}/stats.json and eval.log
+```
+
+On 10-shot Babies (one seed, single RTX 6000 Ada, batch size 2), the EMA snapshots were much more stable than the raw generator: between 3K and 8K iterations the EMA FID stayed within about 9 points, while a run without these options (and with batch size 1) moved by about 38 points over the same iterations. This is a single-seed observation, not a controlled ablation. `release/fsig_release.sh` is the paper-settings script (no EMA) used for comparison.
+
 ## Subject-driven Personalization with SDv1.5 
 
 ### Environment
@@ -418,6 +446,32 @@ Generated images and metadata are saved under `2_SDP/test_outputs/` by default, 
 
 
 
+
+### 4) Optional: SDP EMA and LR Decay
+
+The same options exist for SDP and are also **off by default**. They are read by `main/pipeline/train_sd.py`:
+
+| Variable | Effect |
+|---|---|
+| `UNIDAD_EMA_DECAY=0.998` | fp32 EMA of the student UNet, updated after every generator step. `save()` also writes `generator_ema.bin`. |
+| `UNIDAD_EMA_DEVICE=cuda` or `cpu` | Where the EMA copy lives (`cpu` saves about 3.4 GB of GPU memory). |
+| `UNIDAD_EMA_EVAL=1` | Pause-time generation and metrics (`--gen_pause_steps`) use the EMA weights. Set `0` to use the raw weights. |
+| `UNIDAD_LR_DECAY_START=0.5`, `UNIDAD_LR_MIN_RATIO=0.1` | Constant, then cosine learning-rate decay (generator, fake teacher, target teacher). |
+
+```bash
+cd 2_SDP
+RUN_ROOT=/path/to/sdp_training GRAD_CKPT=--gradient_checkpointing \
+UNIDAD_EMA_DECAY=0.998 UNIDAD_LR_DECAY_START=0.5 UNIDAD_LR_MIN_RATIO=0.1 \
+bash scripts/train_test_stream.sh
+# test the EMA weights:
+TARGET_CKPT_PATH=/path/to/subject_ft_sd15/generator_ema.bin PROMPT="a prt cat in the jungle" bash scripts/test.sh
+```
+
+All paths and hyperparameters in `scripts/train.sh` and `scripts/train_test_stream.sh` can now be set from the environment (`RUN_ROOT`, `CHECKPOINT_PATH`, `LMDB_PATH`, `GEN_LR`, `TRAIN_ITERS`, `INSTANCE_ID`, ...). `GRAD_CKPT=--gradient_checkpointing` helps fit 48 GB GPUs.
+
+Note: `INSTANCE_ID` is a **class** label (see `main/prepare_data/README.md`), so subjects of the same class (for example `cat` and `cat2`) share it. To train on a single subject, build an LMDB that contains only that subject.
+
+The SDP EMA and LR decay are new and have been unit-tested, but not yet run end to end on a GPU.
 
 ## Contact
 

@@ -21,8 +21,8 @@ esac
 SRC_W=$(python3 -c "print(1-$A)")
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RUNS_ROOT="${RUNS_ROOT:-$HOME/uni-DAD-runs}"
-SNAP_ROOT="${SNAP_ROOT:-/mnt/d/uni-DAD-runs}"
+RUNS_ROOT="${RUNS_ROOT:-$REPO/1_FSIG/checkpoint_path}"
+SNAP_ROOT="${SNAP_ROOT:-$RUNS_ROOT}"   # generator snapshots (~2.2 GB each); put on a big disk if needed
 RUN_NAME="${RUN_NAME:-v2_${DS}_a${A}}"
 RUN_DIR="$RUNS_ROOT/$RUN_NAME"
 
@@ -30,7 +30,7 @@ export DATASET_NAME="$DS" DATASET_SIZE=10 CATEGORY="$DS"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" TRAIN_GPUS=0 TEST_GPUS=0
 export NPROC_PER_NODE=1 NNODES=1
 export EXPERIMENT_NAME="$RUN_NAME" WANDB_NAME="$RUN_NAME" OUTPUT_PATH="$RUN_DIR"
-export CHECKPOINT_INIT="${CHECKPOINT_INIT:-$HOME/uni-DAD-ckpt/ffhq.pt}"
+export CHECKPOINT_INIT="${CHECKPOINT_INIT:-$REPO/1_FSIG/checkpoints/ffhq.pt}"
 export WANDB_MODE="${WANDB_MODE:-offline}"
 
 # ---- paper recipe ----
