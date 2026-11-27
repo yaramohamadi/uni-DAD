@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the FSIG release jobs one after another on a single GPU.
-# Usage: nohup bash release/fsig_chain.sh babies metfaces > ~/uni-DAD-runs/chain.log 2>&1 &
+# Usage: nohup bash release/fsig_chain.sh babies metfaces > chain.log 2>&1 &
 set -uo pipefail
 # activate the FSIG env if conda is available (CONDA_ENV=unidad by default)
 if command -v conda >/dev/null 2>&1; then eval "$(conda shell.bash hook)"; conda activate "${CONDA_ENV:-unidad}"; fi
