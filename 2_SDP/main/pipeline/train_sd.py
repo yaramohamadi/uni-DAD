@@ -715,6 +715,29 @@ class Trainer:
             )
             self.tt_max_grad_norm = self.max_grad_norm
 
+        # Opt-in LR decay (same as FSIG): UNIDAD_LR_DECAY_START = fraction of train_iters where a
+        # cosine decay starts, UNIDAD_LR_MIN_RATIO = final lr / base lr. Linear warm-up kept.
+        _decay_start = os.environ.get("UNIDAD_LR_DECAY_START", "")
+        if _decay_start:
+            _start = int(float(_decay_start) * args.train_iters)
+            _floor = float(os.environ.get("UNIDAD_LR_MIN_RATIO", "0.1"))
+            _warm = max(1, args.warmup_step)
+            _total = args.train_iters
+
+            def _lr_lambda(step, _start=_start, _floor=_floor, _warm=_warm, _total=_total):
+                if step < _warm:
+                    return step / _warm
+                if step < _start:
+                    return 1.0
+                prog = min(1.0, (step - _start) / max(1, _total - _start))
+                return _floor + (1.0 - _floor) * 0.5 * (1.0 + math.cos(math.pi * prog))
+
+            self.scheduler_generator = torch.optim.lr_scheduler.LambdaLR(self.optimizer_generator, _lr_lambda)
+            self.scheduler_guidance = torch.optim.lr_scheduler.LambdaLR(self.optimizer_guidance, _lr_lambda)
+            if getattr(self, "tt_optimizer", None) is not None:
+                self.tt_scheduler = torch.optim.lr_scheduler.LambdaLR(self.tt_optimizer, _lr_lambda)
+            accelerator.print(f"[unidad] LR decay: cosine from iter {_start} to {_total}, floor x{_floor}")
+
         # --- FSDP: prepare optimizers / schedulers ---
         if self.fsdp:
             to_prep = [
@@ -757,6 +780,23 @@ class Trainer:
             if self.enable_target_teacher:
                 self.tt_optimizer        = prepped[i]; i += 1
                 self.tt_scheduler        = prepped[i]; i += 1
+
+        # Opt-in generator-only EMA (same as FSIG). UNIDAD_EMA_DECAY per generator update,
+        # UNIDAD_EMA_DEVICE = cuda (default) | cpu (saves ~3.4 GB GPU memory for SD1.5).
+        # Note: the older `self.ema` hook in save() is unrelated and stays unused.
+        self.gen_ema = None
+        self.gen_ema_updates = 0
+        self.gen_ema_decay = float(os.environ.get("UNIDAD_EMA_DECAY", "0") or 0)
+        if self.gen_ema_decay > 0:
+            if self.fsdp:
+                raise NotImplementedError("UNIDAD_EMA_DECAY is not supported together with --fsdp")
+            _dev = os.environ.get("UNIDAD_EMA_DEVICE", "cuda")
+            _dev = accelerator.device if _dev == "cuda" else torch.device("cpu")
+            _gen = accelerator.unwrap_model(self.model.feedforward_model)
+            self.gen_ema = {n: p.detach().to(_dev, torch.float32).clone()
+                            for n, p in _gen.named_parameters() if p.requires_grad}
+            accelerator.print(f"[unidad] generator EMA on: decay {self.gen_ema_decay}, "
+                              f"{len(self.gen_ema)} tensors on {_dev}")
 
         # --- After prepare: refresh TT + guidance param lists for clipping/logging ---
         if self.enable_target_teacher:
@@ -1130,7 +1170,46 @@ class Trainer:
 
 
 
+    @torch.no_grad()
+    def _gen_ema_update(self):
+        self.gen_ema_updates += 1
+        n = self.gen_ema_updates
+        d = min(self.gen_ema_decay, (1.0 + n) / (10.0 + n))   # warm-up
+        gen = self.accelerator.unwrap_model(self.model.feedforward_model)
+        for name, p in gen.named_parameters():
+            e = self.gen_ema.get(name)
+            if e is not None:
+                e.mul_(d).add_(p.detach().to(e.device, torch.float32), alpha=1.0 - d)
+
+    @torch.no_grad()
+    def _gen_ema_swap(self):
+        """Swap generator weights <-> EMA weights in place (call twice to undo)."""
+        gen = self.accelerator.unwrap_model(self.model.feedforward_model)
+        for name, p in gen.named_parameters():
+            e = self.gen_ema.get(name)
+            if e is None:
+                continue
+            tmp = p.detach().to(e.device, torch.float32).clone()
+            p.copy_(e.to(p.device, p.dtype))
+            e.copy_(tmp)
+
+    def _gen_ema_state_dict(self):
+        gen = self.accelerator.unwrap_model(self.model.feedforward_model)
+        by_id = {id(p): self.gen_ema[n] for n, p in gen.named_parameters() if n in self.gen_ema}
+        copies, sd = {}, {}
+        for k, v in gen.state_dict(keep_vars=True).items():   # alias-safe, like FSIG
+            if id(v) not in copies:
+                e = by_id.get(id(v))
+                copies[id(v)] = (e.to(v.dtype) if e is not None else v.detach()).cpu().clone()
+            sd[k] = copies[id(v)]
+        return sd
+
     def save(self):
+        if getattr(self, "gen_ema", None) is not None and self.accelerator.is_main_process:
+            os.makedirs(self.output_path, exist_ok=True)
+            torch.save(self._gen_ema_state_dict(), os.path.join(self.output_path, "generator_ema.bin"))
+            torch.save(self.gen_ema_updates, os.path.join(self.output_path, "generator_ema_updates.pt"))
+            self.accelerator.print(f"[unidad] saved generator_ema.bin at step {self.step}")
         # NOTE: we save the checkpoints to two places 
         # 1. output_path: save the latest one, this is assumed to be a permanent storage
         # 2. cache_dir: save all checkpoints, this is assumed to be a temporary storage
@@ -1428,6 +1507,8 @@ class Trainer:
             self.optimizer_generator.zero_grad() 
             self.optimizer_guidance.zero_grad()
             self.scheduler_generator.step()
+            if self.gen_ema is not None:
+                self._gen_ema_update()
 
         # update the guidance model (dfake and classifier)
        
@@ -2009,7 +2090,16 @@ class Trainer:
                 self.accelerator.wait_for_everyone()
                 if self.accelerator.is_main_process:
                     print(f"[pause] step {self.step}: paused generation")
-                self._paused_generate()
+                # with EMA on, pause-time samples/metrics use the EMA weights
+                # (UNIDAD_EMA_EVAL=0 to keep the raw weights)
+                _use_ema = self.gen_ema is not None and os.environ.get("UNIDAD_EMA_EVAL", "1") == "1"
+                if _use_ema:
+                    self._gen_ema_swap()
+                try:
+                    self._paused_generate()
+                finally:
+                    if _use_ema:
+                        self._gen_ema_swap()
                 self.accelerator.wait_for_everyone()
 
             # checkpoint space safe
