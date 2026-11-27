@@ -16,30 +16,35 @@ RDZV_ID="run_$$_$(date +%s%N)"              # unique id per run
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"  # set 0 / 1 in each shell
 
 
-# Paths
+# Paths (override any of them from the environment)
 # Adapt to your repo structure and data locations. The script assumes a shared filesystem across nodes.
-export RUN_ROOT=/projets/$USER/uni-dad/sdp_training
-CHECKPOINT_PATH="$RUN_ROOT/checkpoints/sdv1.5/laion6.25_sd_baseline_8node_guidance1.75_lr5e-7_seed10_dfake10_diffusion1000_gan1e-3_resume_fid8.35"
-WANDB_ENTITY="your wandb entity here"
-WANDB_PROJECT="Uni-DAD_SDP_training"
-LMDB_PATH="$RUN_ROOT/data/instances.lmdb"
-PROMPT_PATH="$RUN_ROOT/data/prompts_and_classes.txt"
-GEN_OUT_ROOT="$RUN_ROOT/output_dmd2"
+export RUN_ROOT="${RUN_ROOT:-/projets/$USER/uni-dad/sdp_training}"
+CHECKPOINT_PATH="${CHECKPOINT_PATH:-$RUN_ROOT/checkpoints/sdv1.5/laion6.25_sd_baseline_8node_guidance1.75_lr5e-7_seed10_dfake10_diffusion1000_gan1e-3_resume_fid8.35}"
+WANDB_ENTITY="${WANDB_ENTITY:-your wandb entity here}"
+WANDB_PROJECT="${WANDB_PROJECT:-Uni-DAD_SDP_training}"
+LMDB_PATH="${LMDB_PATH:-$RUN_ROOT/data/instances.lmdb}"
+PROMPT_PATH="${PROMPT_PATH:-$RUN_ROOT/data/prompts_and_classes.txt}"
+GEN_OUT_ROOT="${GEN_OUT_ROOT:-$RUN_ROOT/output_dmd2}"
 mkdir -p "$CHECKPOINT_PATH"
 
-# Optional: make the wandb run name unique too HIGHLR_2e-6_LOSSGEN0.75e-1_LOSSGUID1.5e-2
-WANDB_NAME="UniDAD_SDV15_baseline_8node_guidance${G_S}_lr${GEN_LR}_seed${SEED}_dfake${GAN_D}_diffusion1000_gan${GAN_G}_resume_fid8.35"
+# ------------------- HPARAMS (defined before WANDB_NAME uses them) -------------------
+GEN_LR="${GEN_LR:-5e-6}"
+GUID_LR="${GUID_LR:-5e-6}"
+BATCH_SIZE="${BATCH_SIZE:-1}"
+TRAIN_ITERS="${TRAIN_ITERS:-5000}"
+SEED="${SEED:-10}"
+G_S="${G_S:-7.5}"
+INSTANCE_ID="${INSTANCE_ID:-3}"   # label id = CLASS index (see main/prepare_data/README.md); subjects sharing a class share it
+GAN_G="${GAN_G:-0.001}"
+GAN_D="${GAN_D:-0.01}"
+# set GRAD_CKPT=--gradient_checkpointing to fit ~48 GB GPUs
+GRAD_CKPT="${GRAD_CKPT:-}"
+# Optional stabilisers (read by train_sd.py from the environment, off by default):
+#   UNIDAD_EMA_DECAY=0.998 UNIDAD_EMA_DEVICE=cuda|cpu UNIDAD_EMA_EVAL=1
+#   UNIDAD_LR_DECAY_START=0.5 UNIDAD_LR_MIN_RATIO=0.1
 
-# ------------------- HPARAMS -------------------
-GEN_LR="5e-6"
-GUID_LR="5e-6"
-BATCH_SIZE="1"
-TRAIN_ITERS="5000"
-SEED="10"
-G_S="7.5"
-INSTANCE_ID="3"
-GAN_G="0.001"
-GAN_D="0.01"
+# Optional: make the wandb run name unique too
+WANDB_NAME="${WANDB_NAME:-UniDAD_SDV15_baseline_8node_guidance${G_S}_lr${GEN_LR}_seed${SEED}_dfake${GAN_D}_diffusion1000_gan${GAN_G}_resume_fid8.35}"
 
 # ----- Launch WITHOUT --standalone; use explicit rendezvous -----
 exec torchrun \
@@ -60,7 +65,8 @@ exec torchrun \
   --initialie_generator --log_iters 1000 \
   --resolution 512 \
   --latent_resolution 64 \
-  --seed 10 \
+  --seed "${SEED}" \
+  ${GRAD_CKPT} \
   --use_fp16 \
   --real_guidance_scale "${G_S}" \
   --fake_guidance_scale 1.0 \
